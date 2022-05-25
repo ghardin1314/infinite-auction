@@ -1,4 +1,4 @@
 ds-test/=lib/forge-std/lib/ds-test/src/
-openzeppelin/=lib/openzeppelin-contracts/contracts
+@openzeppelin/=lib/openzeppelin-contracts
 nouns/=lib/nouns-monorepo/packages/nouns-contracts/contracts
 forge-std/=lib/forge-std/src/
