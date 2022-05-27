@@ -1,4 +1,28 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: GPL-3.0
+
+/// @title Infinite Auction House created for @NounsPropHouse
+
+/*********************************
+ * ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ *
+ * ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ *
+ * ░░░░░░█████████░░█████████░░░ *
+ * ░░░░░░██░░░████░░██░░░████░░░ *
+ * ░░██████░░░████████░░░████░░░ *
+ * ░░██░░██░░░████░░██░░░████░░░ *
+ * ░░██░░██░░░████░░██░░░████░░░ *
+ * ░░░░░░█████████░░█████████░░░ *
+ * ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ *
+ * ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ *
+ *********************************/
+
+// LICENSE
+// InfiniteAuctionHouse.sol is a modified version of NounsDao NounsAuctionHouse which is a modification of Zora's AuctionHouse.sol:
+// https://github.com/ourzora/auction-house/blob/54a12ec1a6cf562e49f0a4917990474b11350a2d/contracts/AuctionHouse.sol
+// https://github.com/nounsDAO/nouns-monorepo/blob/master/packages/nouns-contracts/contracts/NounsAuctionHouse.sol
+// 
+// AuctionHouse.sol source code Copyright Zora licensed under the GPL-3.0 license.
+// With modifications by ghard.eth
+
 pragma solidity ^0.8.13;
 
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
@@ -8,15 +32,13 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "nouns/interfaces/INounsToken.sol";
 import {IWETH} from "nouns/interfaces/IWETH.sol";
 
-import {IInfiniteAuctionHouse} from "src/IInfiniteAuctionHouse.sol";
-
-import "forge-std/Test.sol";
+import {InfiniteAuctionHouseInterface} from "src/InfiniteAuctionHouse.interface.sol";
 
 contract InfiniteAuctionHouse is
     ReentrancyGuard,
     Pausable,
     Ownable,
-    IInfiniteAuctionHouse
+    InfiniteAuctionHouseInterface
 {
     // The Nouns ERC721 token contract
     INounsToken public nouns;
@@ -116,8 +138,6 @@ contract InfiniteAuctionHouse is
         // check if new top bid
         bool extended;
         if (prevBidder == SENTINEL_BID && bidAmt > nextBid.amt) {
-            // console.log("New Top Bid");
-
             // check that old bid was outbid by min amount
             require(
                 bidAmt >=
@@ -129,7 +149,6 @@ contract InfiniteAuctionHouse is
             // check if auction needs to be extended
             extended = _auction.endTime - block.timestamp < timeBuffer;
             if (extended) {
-                console.log("Extended");
                 auction.endTime = _auction.endTime =
                     block.timestamp +
                     timeBuffer;
@@ -180,6 +199,8 @@ contract InfiniteAuctionHouse is
         );
         uint256 amt = _deleteBid(msg.sender);
         _safeTransferETHWithFallback(msg.sender, amt);
+
+        emit AuctionBidRevoked(msg.sender, amt);
     }
 
     function pause() external onlyOwner {
@@ -228,6 +249,8 @@ contract InfiniteAuctionHouse is
                 endTime: endTime,
                 settled: false
             });
+
+            emit AuctionCreated(nounId, startTime, endTime);
         } catch Error(string memory) {
             _pause();
         }

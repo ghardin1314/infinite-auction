@@ -2,12 +2,15 @@
 pragma solidity ^0.8.13;
 
 import "forge-std/Test.sol";
-import "src/InfiniteAuctionHouse.sol";
+
+import {InfiniteAuctionHouseEvents} from "src/InfiniteAuctionHouse.events.sol";
+import {InfiniteAuctionHouse} from "src/InfiniteAuctionHouse.sol";
+
 import "src/NounTokenMock.sol";
 
 import "nouns/test/WETH.sol";
 
-contract Base is Test {
+contract Base is Test, InfiniteAuctionHouseEvents {
     uint256 TIME_BUFFER = 15 * 60;
     uint256 RESERVE_PRICE = 2;
     uint8 MIN_INCREMENT_BID_PERCENTAGE = 5;
@@ -114,6 +117,9 @@ contract WhenCreatingInitialBid is WhenAuctionLive {
     }
 
     function testCanPlaceTopBid() public {
+        vm.expectEmit(true, true, false, true, address(auctionHouse));
+        emit AuctionBid(1, alice, 1 ether, false);
+
         createBidAs(alice, 1 ether);
 
         (, , nextBidder) = auctionHouse.bids(SENTINEL_BID);
@@ -186,35 +192,20 @@ contract WhenPlacingNewTopBid is WhenAuctionLive {
 
     function testOutBidExtendsAuction() public {
         (, , uint256 oldEndTime, ) = auctionHouse.auction();
+
         uint256 newTime = oldEndTime - 1;
         vm.warp(newTime);
+
+        vm.expectEmit(true, false, false, true, address(auctionHouse));
+        emit AuctionExtended(1, newTime + TIME_BUFFER);
+
+        vm.expectEmit(true, true, false, true, address(auctionHouse));
+        emit AuctionBid(1, bob, 2 ether, true);
+
         createBidAs(bob, 2 ether);
         (, , uint256 newEndTime, ) = auctionHouse.auction();
 
         assertEq(newEndTime, newTime + TIME_BUFFER);
-    }
-}
-
-contract WhenRevokingBid is WhenAuctionLive {
-    function setUp() public virtual override {
-        WhenAuctionLive.setUp();
-        createBidAs(alice, 1 ether);
-    }
-
-    function testCantRevokeTopBid() public {
-        vm.prank(alice);
-        vm.expectRevert("Currently leading bid");
-        auctionHouse.revokeBid();
-    }
-
-    function testCanRevokeNonTopBid() public {
-        createBidAs(bob, 2 ether);
-
-        uint256 prevBal = alice.balance;
-        vm.prank(alice);
-        auctionHouse.revokeBid();
-        assertEq(prevBal + 1 ether, alice.balance);
-        assertEq(address(auctionHouse).balance, 2 ether);
     }
 }
 
@@ -285,6 +276,29 @@ contract WhenPlacingNonTopBid is WhenAuctionLive {
     }
 }
 
+contract WhenRevokingBid is WhenAuctionLive {
+    function setUp() public virtual override {
+        WhenAuctionLive.setUp();
+        createBidAs(alice, 1 ether);
+    }
+
+    function testCantRevokeTopBid() public {
+        vm.prank(alice);
+        vm.expectRevert("Currently leading bid");
+        auctionHouse.revokeBid();
+    }
+
+    function testCanRevokeNonTopBid() public {
+        createBidAs(bob, 2 ether);
+
+        uint256 prevBal = alice.balance;
+        vm.prank(alice);
+        auctionHouse.revokeBid();
+        assertEq(prevBal + 1 ether, alice.balance);
+        assertEq(address(auctionHouse).balance, 2 ether);
+    }
+}
+
 contract WhenSettlingAuction is WhenAuctionLive {
     function setUp() public virtual override {
         WhenAuctionLive.setUp();
@@ -296,6 +310,9 @@ contract WhenSettlingAuction is WhenAuctionLive {
 
     function testSettlingAuctionPopsTopBid() public {
         uint256 prevOwnerBal = address(this).balance;
+
+        vm.expectEmit(true, false, false, true, address(auctionHouse));
+        emit AuctionSettled(1, bob, 2 ether);
 
         auctionHouse.settleCurrentAndCreateNewAuction();
 
@@ -311,6 +328,22 @@ contract WhenSettlingAuction is WhenAuctionLive {
         assertEq(prevBidder, address(0));
         assertEq(nextBidder, address(0));
         assertEq(amt, 0);
+    }
+
+    function testNounTransferredToWinner() public {
+        vm.expectCall(
+            address(nouns),
+            abi.encodeCall(nouns.transferFrom, (address(auctionHouse), bob, 1))
+        );
+
+        auctionHouse.settleCurrentAndCreateNewAuction();
+    }
+
+    function testNextAuctionStarted() public {
+        vm.expectEmit(true, false, false, true, address(auctionHouse));
+        emit AuctionCreated(1, block.timestamp, block.timestamp + DURATION);
+
+        auctionHouse.settleCurrentAndCreateNewAuction();
     }
 
     function testSettlingSequentialAuctions() public {
