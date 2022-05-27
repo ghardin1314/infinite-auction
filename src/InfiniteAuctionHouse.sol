@@ -19,7 +19,7 @@
 // InfiniteAuctionHouse.sol is a modified version of NounsDao NounsAuctionHouse which is a modification of Zora's AuctionHouse.sol:
 // https://github.com/ourzora/auction-house/blob/54a12ec1a6cf562e49f0a4917990474b11350a2d/contracts/AuctionHouse.sol
 // https://github.com/nounsDAO/nouns-monorepo/blob/master/packages/nouns-contracts/contracts/NounsAuctionHouse.sol
-// 
+//
 // AuctionHouse.sol source code Copyright Zora licensed under the GPL-3.0 license.
 // With modifications by ghard.eth
 
@@ -93,6 +93,9 @@ contract InfiniteAuctionHouse is
         duration = _duration;
     }
 
+    /**
+     * @notice Settle the current auction, mint a new Noun, and put it up for auction.
+     */
     function settleCurrentAndCreateNewAuction()
         external
         nonReentrant
@@ -102,15 +105,24 @@ contract InfiniteAuctionHouse is
         _createAuction();
     }
 
+    /**
+     * @notice Settle the current auction.
+     * @dev This function can only be called when the contract is paused.
+     */
     function settleAuction() external nonReentrant whenPaused {
         _settleAuction();
     }
 
+    /**
+     * @notice Create a bid for a Noun, with a given amount.
+     * @dev This contract only accepts payment in ETH.
+     */
     function createBid() external payable nonReentrant {
         _createBid(SENTINEL_BID);
     }
 
     /**
+     * @notice Create a bid for a Noun that is less than the bid of `prevBidder`, with a given amount.
      * @dev This function should be called for bids that are not top bid as a more efficient way to
      * @dev traverse the linked list by specifying the starting point
      */
@@ -192,6 +204,10 @@ contract InfiniteAuctionHouse is
         delete (bids[bidder]);
     }
 
+    /**
+     * @notice Revoke your bid and be refunded
+     * @dev Cannot revoke top bid
+     */
     function revokeBid() external override nonReentrant {
         require(
             bids[msg.sender].prevBidder != SENTINEL_BID,
@@ -203,10 +219,21 @@ contract InfiniteAuctionHouse is
         emit AuctionBidRevoked(msg.sender, amt);
     }
 
+    /**
+     * @notice Pause the Nouns auction house.
+     * @dev This function can only be called by the owner when the
+     * contract is unpaused. While no new auctions can be started when paused,
+     * anyone can settle an ongoing auction.
+     */
     function pause() external onlyOwner {
         _pause();
     }
 
+    /**
+     * @notice Unpause the Nouns auction house.
+     * @dev This function can only be called by the owner when the
+     * contract is paused. If required, this function will start a new auction.
+     */
     function unpause() external onlyOwner {
         _unpause();
 
@@ -215,18 +242,30 @@ contract InfiniteAuctionHouse is
         }
     }
 
+    /**
+     * @notice Set the auction time buffer.
+     * @dev Only callable by the owner.
+     */
     function setTimeBuffer(uint256 _timeBuffer) external onlyOwner {
         timeBuffer = _timeBuffer;
 
         emit AuctionTimeBufferUpdated(_timeBuffer);
     }
 
+    /**
+     * @notice Set the auction reserve price.
+     * @dev Only callable by the owner.
+     */
     function setReservePrice(uint256 _reservePrice) external onlyOwner {
         reservePrice = _reservePrice;
 
         emit AuctionReservePriceUpdated(_reservePrice);
     }
 
+    /**
+     * @notice Set the auction minimum bid increment percentage.
+     * @dev Only callable by the owner.
+     */
     function setMinBidIncrementPercentage(uint8 _minBidIncrementPercentage)
         external
         onlyOwner
@@ -238,6 +277,12 @@ contract InfiniteAuctionHouse is
         );
     }
 
+    /**
+     * @notice Create an auction.
+     * @dev Store the auction details in the `auction` state variable and emit an AuctionCreated event.
+     * If the mint reverts, the minter was updated without pausing this contract first. To remedy this,
+     * catch the revert and pause this contract.
+     */
     function _createAuction() internal {
         try nouns.mint() returns (uint256 nounId) {
             uint256 startTime = block.timestamp;
@@ -256,6 +301,10 @@ contract InfiniteAuctionHouse is
         }
     }
 
+    /**
+     * @notice Settle an auction, finalizing the bid and paying out to the owner.
+     * @dev If there are no bids, the Noun is burned.
+     */
     function _settleAuction() internal {
         Auction memory _auction = auction;
 
