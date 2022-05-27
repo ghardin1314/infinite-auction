@@ -33,3 +33,4 @@ In this new auction implementation, bids are carried over between auction rounds
 
 This model is envisioned for usage in expansions of the NounsDAO model which higher supply and more frequent auctions that may not be as popular as Nouns. It may also work well for projects on cheaper chains such as Polygon, Arbitrum, or Optimisim where the DAO can afford to automattically settle auctions so the bidders can truely "Bid and Forget". They will then be pleasantly surprised one day when their won NFT shows up in their wallet unannounced.   
 
+**Contract not audited or fully tested. Use at own risk**
